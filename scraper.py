@@ -49,7 +49,7 @@ async def crawler_products(context, url, semaphore, producer):
 
             product[f"{tittle}"].append({item1: item2})
 
-        await send_to_kafka(producer, "scraper-topic", product)
+        await send_to_kafka(producer, "scraper-topic", {"tittle":tittle, "price": price})
         
         await page.close()
         return product
