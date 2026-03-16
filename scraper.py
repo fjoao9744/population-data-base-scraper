@@ -32,11 +32,13 @@ async def crawler_products(context, url, semaphore, producer):
         product = {}
 
         await page.goto(url, wait_until="domcontentloaded")
-
-        tittle = await page.locator("#productTitle").text_content()
-        tittle = tittle.replace("\n", "").strip()
-        tittle = " ".join(tittle.split())
-        price = await page.locator(".a-price-whole").first.text_content()
+        try:
+            tittle = await page.locator("#productTitle").text_content()
+            tittle = tittle.replace("\n", "").strip()
+            tittle = " ".join(tittle.split())
+            price = await page.locator(".a-price-whole").first.text_content()
+        except: 
+            return {"tittle": "", "price": ""}
 
         product[f"{tittle}"] = []
 
@@ -50,6 +52,7 @@ async def crawler_products(context, url, semaphore, producer):
             product[f"{tittle}"].append({item1: item2})
 
         await send_to_kafka(producer, "scraper-topic", {"tittle":tittle, "price": price})
+        print("mandado: ", {"tittle":tittle, "price": price})
         
         await page.close()
         return product
@@ -64,7 +67,7 @@ async def main():
     producer = await start_producer()
     async with async_playwright() as p:
 
-        browser = await p.chromium.launch(headless=False)
+        browser = await p.chromium.launch(headless=True)
         context = await browser.new_context()
         await context.route("**/*", block_resources)
 

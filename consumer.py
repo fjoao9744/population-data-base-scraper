@@ -5,19 +5,40 @@ import aiosqlite
 
 queue = asyncio.Queue()
 
+async def insert_batch(conn, batch):
+    placeholders = ",".join(["(?, ?)"] * len(batch))
+
+    query = f"""
+    INSERT INTO celulares (name, price)
+    VALUES {placeholders}
+    """
+
+    await conn.executemany(
+        "INSERT INTO celulares (tittle, price) VALUES (?, ?)",
+        batch
+    )
+
 async def database_worker(conn):
-
     while True:
-        data = await queue.get()
+        batch = []
+    
+        while len(batch) < 50:
+            try:
+                item = await asyncio.wait_for(queue.get(), 0.2)
+                batch.append(item)
+                print(item)
+                
+            except asyncio.TimeoutError:
+                pass
 
-        await conn.execute(
-            "INSERT INTO celulares (tittle, price) VALUES (?, ?)",
-            (data["tittle"], data["price"])
-        )
+        if not batch:
+            continue
 
+        await insert_batch(conn, batch)
         await conn.commit()
 
-        queue.task_done()
+        for _ in batch:
+            queue.task_done()
 
 
 async def consume():
@@ -42,18 +63,19 @@ async def consume():
     """)
 
     await conn.commit()
-
-    asyncio.create_task(database_worker(conn))
+    for _ in range(3): # workers
+        asyncio.create_task(database_worker(conn))
 
     try:
         async for msg in consumer:
 
             data = json.loads(msg.value)
 
-            await queue.put(data)
+            await queue.put((data["tittle"], data["price"]))
 
     finally:
+        await conn.close()
         await consumer.stop()
 
-
 asyncio.run(consume())
+
